@@ -1,0 +1,87 @@
+#include "stm32l476xx.h"
+#include "TIM5.h"  // Assuming TIM5 is used for the PWM generation for servos
+
+// Definitions for servo control PWM channels
+#define SERVO_FRONT_LEFT_CHANNEL  1
+#define SERVO_FRONT_RIGHT_CHANNEL 2
+#define SERVO_BACK_LEFT_CHANNEL   3
+#define SERVO_BACK_RIGHT_CHANNEL  4
+
+// Helper functions to position each servo
+void setServoAngle(int channel, int angle) {
+    // Convert angle to PWM pulse width, assuming 1ms-2ms pulse width corresponding to 0-180 degrees
+    int pulse_width = (angle * 1000 / 180) + 1000;
+    switch(channel) {
+        case SERVO_FRONT_LEFT_CHANNEL:
+            TIM5->CCR1 = pulse_width; break;
+        case SERVO_FRONT_RIGHT_CHANNEL:
+            TIM5->CCR2 = pulse_width; break;
+        case SERVO_BACK_LEFT_CHANNEL:
+            TIM5->CCR3 = pulse_width; break;
+        case SERVO_BACK_RIGHT_CHANNEL:
+            TIM5->CCR4 = pulse_width; break;
+    }
+}
+
+void initializeServos() {
+    // Configuration for TIM5, assuming a prescaler and period already set to accommodate 1ms-2ms pulse widths
+    RCC->APB1ENR1 |= RCC_APB1ENR1_TIM5EN; // Enable clock for TIM5
+    TIM5->CR1 = 0x00;
+    TIM5->PSC = 79;  // Prescaler to scale 80MHz clock down to 1MHz (1us resolution)
+    TIM5->ARR = 19999;  // Period for 20ms frequency
+    TIM5->CCMR1 = 0x6060;  // PWM mode 1 on channels 1 and 2
+    TIM5->CCMR2 = 0x6060;  // PWM mode 1 on channels 3 and 4
+    TIM5->CCER = 0x1111;   // Enable all channels
+    TIM5->CR1 |= 0x01;     // Enable the timer
+}
+
+void turnLeft() {
+    setServoAngle(SERVO_FRONT_LEFT_CHANNEL, 135);
+    setServoAngle(SERVO_FRONT_RIGHT_CHANNEL, 135);
+}
+
+void turnRight() {
+    setServoAngle(SERVO_FRONT_LEFT_CHANNEL, 45);
+    setServoAngle(SERVO_FRONT_RIGHT_CHANNEL, 45);
+}
+
+void driveStraight() {
+    setServoAngle(SERVO_FRONT_LEFT_CHANNEL, 90);
+    setServoAngle(SERVO_FRONT_RIGHT_CHANNEL, 90);
+}
+
+void turnAround() {
+    setServoAngle(SERVO_FRONT_LEFT_CHANNEL, 180);
+    setServoAngle(SERVO_FRONT_RIGHT_CHANNEL, 180);
+}
+
+// Placeholder function to simulate obtaining distance from ultrasonic sensors
+float get_distance_from_sensor(int sensor_id) {
+    // This function should implement actual distance measurement logic
+    // for the specified sensor ID
+    return 10.0;  // Return some dummy distance for now
+}
+
+int main(void) {
+    initializeServos();
+    driveStraight();  // Start driving straight
+
+    while (1) {
+        float front_distance = get_distance_from_sensor(0);
+        float left_distance = get_distance_from_sensor(1);
+        float right_distance = get_distance_from_sensor(2);
+        float back_distance = get_distance_from_sensor(3);
+
+        if (front_distance < 10.0) {
+            if (left_distance > right_distance) {
+                turnLeft();
+            } else {
+                turnRight();
+            }
+        } else if (back_distance < 10.0) {
+            turnAround();
+        } else {
+            driveStraight();
+        }
+    }
+}
