@@ -1,87 +1,86 @@
 #include "stm32l476xx.h"
-#include "TIM5.h"  // Assuming TIM5 is used for the PWM generation for servos
+#include "dc_motor.h"
 
-// Definitions for servo control PWM channels
-#define SERVO_FRONT_LEFT_CHANNEL  1
-#define SERVO_FRONT_RIGHT_CHANNEL 2
-#define SERVO_BACK_LEFT_CHANNEL   3
-#define SERVO_BACK_RIGHT_CHANNEL  4
+// GPIO Pin Definitions for Motor Control
+#define IN1_PIN (1 << 0)  // PC0
+#define IN2_PIN (1 << 1)  // PC1
+#define IN3_PIN (1 << 2)  // PC2
+#define IN4_PIN (1 << 3)  // PC3
 
-// Helper functions to position each servo
-void setServoAngle(int channel, int angle) {
-    // Convert angle to PWM pulse width, assuming 1ms-2ms pulse width corresponding to 0-180 degrees
-    int pulse_width = (angle * 1000 / 180) + 1000;
-    switch(channel) {
-        case SERVO_FRONT_LEFT_CHANNEL:
-            TIM5->CCR1 = pulse_width; break;
-        case SERVO_FRONT_RIGHT_CHANNEL:
-            TIM5->CCR2 = pulse_width; break;
-        case SERVO_BACK_LEFT_CHANNEL:
-            TIM5->CCR3 = pulse_width; break;
-        case SERVO_BACK_RIGHT_CHANNEL:
-            TIM5->CCR4 = pulse_width; break;
-    }
+// Timer setup for PWM control
+void setup_pwm_timers() {
+    // Enable clock for TIM1 and TIM3
+    RCC->APB2ENR |= RCC_APB2ENR_TIM1EN;
+    RCC->APB1ENR1 |= RCC_APB1ENR1_TIM3EN;
+    
+    // Configure PWM mode for TIM1 Channel 1 and TIM3 Channel 1
+    TIM1->CCMR1 |= TIM_CCMR1_OC1M_1 | TIM_CCMR1_OC1M_2;  // PWM mode 1 on Channel 1
+    TIM3->CCMR1 |= TIM_CCMR1_OC1M_1 | TIM_CCMR1_OC1M_2;  // PWM mode 1 on Channel 1
+    
+    // Set output to active high
+    TIM1->CCER |= TIM_CCER_CC1E;
+    TIM3->CCER |= TIM_CCER_CC1E;
+    
+    // Set prescaler and auto-reload for desired PWM frequency and duty cycle
+    TIM1->PSC = 79;  // Assuming 80 MHz clock, prescaler at 80 for 1 MHz timer clock
+    TIM3->PSC = 79;
+    TIM1->ARR = 999;  // Auto-reload at 1000 for 1 kHz PWM frequency
+    TIM3->ARR = 999;
+    
+    // Enable TIM1 and TIM3
+    TIM1->CR1 |= TIM_CR1_CEN;
+    TIM3->CR1 |= TIM_CR1_CEN;
 }
 
-void initializeServos() {
-    // Configuration for TIM5, assuming a prescaler and period already set to accommodate 1ms-2ms pulse widths
-    RCC->APB1ENR1 |= RCC_APB1ENR1_TIM5EN; // Enable clock for TIM5
-    TIM5->CR1 = 0x00;
-    TIM5->PSC = 79;  // Prescaler to scale 80MHz clock down to 1MHz (1us resolution)
-    TIM5->ARR = 19999;  // Period for 20ms frequency
-    TIM5->CCMR1 = 0x6060;  // PWM mode 1 on channels 1 and 2
-    TIM5->CCMR2 = 0x6060;  // PWM mode 1 on channels 3 and 4
-    TIM5->CCER = 0x1111;   // Enable all channels
-    TIM5->CR1 |= 0x01;     // Enable the timer
+// Function to configure GPIO pins for the motor driver
+void configure_motor_pins() {
+    RCC->AHB2ENR |= RCC_AHB2ENR_GPIOCEN;  // Enable Clock for GPIOC
+    GPIOC->MODER &= ~((0x3 << (0 * 2)) | (0x3 << (1 * 2)) | (0x3 << (2 * 2)) | (0x3 << (3 * 2)));  // Clear mode bits
+    GPIOC->MODER |= (0x2 << (0 * 2)) | (0x2 << (1 * 2)) | (0x2 << (2 * 2)) | (0x2 << (3 * 2));  // Set mode to AF (alternate function)
+    GPIOC->AFR[0] |= (1 << (0 * 4)) | (1 << (1 * 4)) | (1 << (2 * 4)) | (1 << (3 * 4));  // Set AF1 for TIM1/TIM3 channels
 }
 
-void turnLeft() {
-    setServoAngle(SERVO_FRONT_LEFT_CHANNEL, 135);
-    setServoAngle(SERVO_FRONT_RIGHT_CHANNEL, 135);
+// Motor control functions using PWM adjustments
+void motor_stop() {
+    TIM1->CCR1 = 0;  // Set duty cycle to 0% (no power)
+    TIM3->CCR1 = 0;
 }
 
-void turnRight() {
-    setServoAngle(SERVO_FRONT_LEFT_CHANNEL, 45);
-    setServoAngle(SERVO_FRONT_RIGHT_CHANNEL, 45);
+void motor_forward() {
+    TIM1->CCR1 = 500;  // 50% duty cycle
+    TIM3->CCR1 = 0;
 }
 
-void driveStraight() {
-    setServoAngle(SERVO_FRONT_LEFT_CHANNEL, 90);
-    setServoAngle(SERVO_FRONT_RIGHT_CHANNEL, 90);
+void motor_backward() {
+    TIM1->CCR1 = 0;
+    TIM3->CCR1 = 500;  // 50% duty cycle
 }
 
-void turnAround() {
-    setServoAngle(SERVO_FRONT_LEFT_CHANNEL, 180);
-    setServoAngle(SERVO_FRONT_RIGHT_CHANNEL, 180);
+void motor_turn_left() {
+    TIM1->CCR1 = 250;  // 25% duty cycle
+    TIM3->CCR1 = 500;  // 50% duty cycle
 }
 
-// Placeholder function to simulate obtaining distance from ultrasonic sensors
-float get_distance_from_sensor(int sensor_id) {
-    // This function should implement actual distance measurement logic
-    // for the specified sensor ID
-    return 10.0;  // Return some dummy distance for now
+void motor_turn_right() {
+    TIM1->CCR1 = 500;  // 50% duty cycle
+    TIM3->CCR1 = 250;  // 25% duty cycle
 }
 
-int main(void) {
-    initializeServos();
-    driveStraight();  // Start driving straight
+void control_logic(float left_distance, float right_distance, float current_distance) {
+    if (current_distance < 10.0) {
+        motor_stop();
+        delay_ms(300);  // Delay for 300 ms
+        motor_backward();  // Reverse the robot
+        delay_ms(1000);  // Move backward for a short duration
 
-    while (1) {
-        float front_distance = get_distance_from_sensor(0);
-        float left_distance = get_distance_from_sensor(1);
-        float right_distance = get_distance_from_sensor(2);
-        float back_distance = get_distance_from_sensor(3);
-
-        if (front_distance < 10.0) {
-            if (left_distance > right_distance) {
-                turnLeft();
-            } else {
-                turnRight();
-            }
-        } else if (back_distance < 10.0) {
-            turnAround();
+        // Check distances to decide the next move
+        if (left_distance > right_distance) {
+            motor_turn_left();
         } else {
-            driveStraight();
+            motor_turn_right();
         }
+    } else {
+        motor_forward();
     }
 }
+
