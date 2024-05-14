@@ -5,6 +5,7 @@
 #include "USART2.h"
 #include "TIM2.h"
 #include "TIM4.h"
+#include "push_button.h"
 
 volatile float right_distance;
 volatile float left_distance;
@@ -43,6 +44,7 @@ int main(void){
 	char msg[] = "\n\rWelcome! Press '1' to start the distance detection and measurement; press '2' to stop the system.\n\r";
 	char turning_right[] = "\n\rTurning right...\n\r";
 	char turning_left[] = "\n\rTurning left...\n\r";
+	char moving_forward[] = "\n\rMoving forward...\n\r";
 	int i=0;
   //////////////////////////////////////////////
 	/**** ULTRA SONIC SENSOR MODULE CONFIGS ****/
@@ -82,6 +84,14 @@ int main(void){
 	//Initialize Timer 5, Channel 2
 	TIM5_CH2_Init();
 	
+	///////////////////////////////////
+	//**** PUSH BUTTON CONFIGS ****///
+	///////////////////////////////////
+  //Invoke configure_Push_Button_pin() to initialize PC13 as an input pin, interfacing with the USER push button.
+	configure_Push_Button_pin();
+	//Invoke configure_EXTI() to set up edge-triggered interrput on PC13
+	configure_EXTI();
+	
 	
 	float distance;
 
@@ -89,7 +99,7 @@ int main(void){
 	while (1){
 		//User presses '1' on the keyboard
 		if(USART2->RDR == '1'){
-			turn_on_LED();			//turn on the on-board LED
+			//turn_on_LED();			//turn on the on-board LED
 			//display_distance(); //display distance measurement to terminal
 			delay(100000);						//add a delay between each print
 		}
@@ -119,7 +129,7 @@ int main(void){
 			
 			
 			//rover decides which way to turn
-			if(distance >= left_distance){
+			if(right_distance > left_distance){
 				//rover turns right
 				print(turning_right);				
 			}
@@ -131,6 +141,7 @@ int main(void){
 		}
 		else{
 			//keep moving forward
+			//print(moving_forward);
 			//display_distance();
 		}
 

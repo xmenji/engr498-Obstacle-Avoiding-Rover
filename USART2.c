@@ -102,24 +102,24 @@ void USART2_IRQHandler(void){
 		
 		//User presses '1'
 		if(USART2->RDR == '1'){
-			//Enable TIM2 (output) 
-			TIM2->CR1 |= 1UL;
-			//Enable TIM4 (input)
-			TIM4->CR1 |= 1UL;
+//			//Enable TIM2 (output) 
+//			TIM2->CR1 |= 1UL;
+//			//Enable TIM4 (input)
+//			TIM4->CR1 |= 1UL;
 		}
 		//User presses '2'
 		else if(USART2->RDR == '2'){
-			//Disable TIM2 (output) 
-			TIM2->CR1 &= ~(1UL);
-			//Disable TIM4 (input)
-			TIM4->CR1 &= ~(1UL);
+//			//Disable TIM2 (output) 
+//			TIM2->CR1 &= ~(1UL);
+//			//Disable TIM4 (input)
+//			TIM4->CR1 &= ~(1UL);
 
-			turn_off_LED();				
-			print(stop_msg);
+			//turn_off_LED();				
+			//print(stop_msg);
 
 		}
 		else{
-			print(error_msg);				
+			//print(error_msg);				
 		}
 		
 	} 
