@@ -96,12 +96,15 @@ int main(void){
 
         distance = get_distance();
         current_distance = distance;
-        if(distance <= 30.0){
+        if(distance <= 50.0){       //Sees obstacle within 50cm
             motor_stop();           // Stop the motors
             delay(1000000);          // Short delay before taking action
 
             motor_backward();       // Move backward
             delay(500000);          // Move backward for a bit
+					
+					  motor_stop();           // Stop the motors to take left/right measurements
+            delay(1000000);          // Short delay before taking action
 
             // Take right distance measurement
             pos_90degrees();
