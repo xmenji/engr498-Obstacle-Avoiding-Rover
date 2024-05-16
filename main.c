@@ -1,4 +1,4 @@
-//Lab 7 Code
+
 #include <stdio.h>
 #include "stm32l476xx.h"
 #include "LED.h"
@@ -6,6 +6,7 @@
 #include "TIM2.h"
 #include "TIM4.h"
 #include "push_button.h"
+#include "dc_motor.h"
 
 volatile float right_distance;
 volatile float left_distance;
@@ -41,7 +42,7 @@ void print(char* msg){
 /////////////////////////////
 int main(void){
 	
-	char msg[] = "\n\rWelcome! Press '1' to start the distance detection and measurement; press '2' to stop the system.\n\r";
+	char msg[] = "\n\rWelcome! Press the User Button to Start and Stop the System\n\r";;
 	char turning_right[] = "\n\rTurning right...\n\r";
 	char turning_left[] = "\n\rTurning left...\n\r";
 	char moving_forward[] = "\n\rMoving forward...\n\r";
@@ -50,100 +51,85 @@ int main(void){
 	/**** ULTRA SONIC SENSOR MODULE CONFIGS ****/
 	/////////////////////////////////////////////
 	
-	// Configure PA5 to serve as an output pin, used for controlling the on-board LED (LD2).
-	configure_LED_pin();
-	
-	//Configure PB10 as TIM2 Channel 3 (Output Trigger)
-	configure_PB10();
-	
-	//Configure PB6 as TIM4 Channel 1 (Input Echo)
-	configure_PB6();
-	
-	//Configure TIM4 CH1 as input capture mode
-	configure_TIM4_CH1();
-	
-	//Configure TIM2 CH3 as PWM output mode 1
-	configure_TIM2_CH3();
-	
-	// Initialize USART2 for communication with a PC via serial terminal.
-	// Configuration details:
-	// - Data format: 8 data bits, no parity, 1 start bit, and 1 stop bit
-	// - Baud rate: 9600
-	// - Enable RXNE interrupt to trigger when a new character is received, allowing for responsive character echo.
-	USART2_Init();
-	
-	// Loop to send the welcome message character by character when the system restarts.
-  print(msg);
-	
-	 ///////////////////////////////////
-	//**** SERVO MODULE CONFIGS ****///
-	///////////////////////////////////
-	//Configure pin PA1
-	configure_PA1();
-	
-	//Initialize Timer 5, Channel 2
-	TIM5_CH2_Init();
-	
-	///////////////////////////////////
-	//**** PUSH BUTTON CONFIGS ****///
-	///////////////////////////////////
-  //Invoke configure_Push_Button_pin() to initialize PC13 as an input pin, interfacing with the USER push button.
-	configure_Push_Button_pin();
-	//Invoke configure_EXTI() to set up edge-triggered interrput on PC13
-	configure_EXTI();
-	
-	
-	float distance;
+// Configure PA5 to serve as an output pin, used for controlling the on-board LED (LD2).
+    configure_LED_pin();
 
-	// Enter an infinite loop to maintain the program's operation.
-	while (1){
-		//User presses '1' on the keyboard
-		if(USART2->RDR == '1'){
-			//turn_on_LED();			//turn on the on-board LED
-			//display_distance(); //display distance measurement to terminal
-			delay(100000);						//add a delay between each print
-		}
+    //Configure PB10 as TIM2 Channel 3 (Output Trigger)
+    configure_PB10();
+
+    //Configure PB6 as TIM4 Channel 1 (Input Echo)
+    configure_PB6();
+
+    //Configure TIM4 CH1 as input capture mode
+    configure_TIM4_CH1();
+
+    //Configure TIM2 CH3 as PWM output mode 1
+    configure_TIM2_CH3();
+
+    // Initialize USART2 for communication with a PC via serial terminal.
+    USART2_Init();
 		
-		distance = get_distance();
-		if(distance <= 9){
-			//rover stops moving
-			current_distance = distance;
-			//rover moves backwards a few cm
-			
-			//rover stops moving
-			
-			//rover looks right; takes measurement
-			pos_90degrees();
-			delay(500000);
-			display_distance();
-			right_distance = get_distance();
-			_0degrees();
-			delay(500000);
-			
-			//rover looks left; takes measurement
-			neg_90degrees();
-			delay(500000);
-			display_distance();
-			left_distance = get_distance();
-			_0degrees();
-			
-			
-			//rover decides which way to turn
-			if(right_distance > left_distance){
-				//rover turns right
-				print(turning_right);				
-			}
-			else{
-				//rover turns left
-				print(turning_left);
-			}
+		///////////////////////////////////
+		//**** MOTOR DRIVER CONFIGS ****///
+		///////////////////////////////////
 
-		}
-		else{
-			//keep moving forward
-			//print(moving_forward);
-			//display_distance();
-		}
+    // Configure motor GPIO pins and initialize PWM timers
+    configure_motor_pins();
+    setup_timers();
+
+    // Loop to send the welcome message character by character when the system restarts.
+    print(msg);
+		
+		///////////////////////////////////
+		//**** PUSH BUTTON CONFIGS ****///
+		///////////////////////////////////
+		//Invoke configure_Push_Button_pin() to initialize PC13 as an input pin, interfacing with the USER push button.
+		configure_Push_Button_pin();
+		//Invoke configure_EXTI() to set up edge-triggered interrput on PC13
+		configure_EXTI();
+
+    float distance;
+
+    // Enter an infinite loop to maintain the program's operation.
+    while (1){
+
+
+        distance = get_distance();
+        current_distance = distance;
+        if(distance <= 30.0){
+            motor_stop();           // Stop the motors
+            delay(1000000);          // Short delay before taking action
+
+            motor_backward();       // Move backward
+            delay(500000);          // Move backward for a bit
+
+            // Take right distance measurement
+            pos_90degrees();
+            delay(500000);
+            display_distance();
+            right_distance = get_distance();
+            _0degrees();
+            delay(500000);
+
+            // Take left distance measurement
+            neg_90degrees();
+            delay(500000);
+            display_distance();
+            left_distance = get_distance();
+            _0degrees();
+
+            // Decide which way to turn
+            if(right_distance >= left_distance){
+                motor_turn_right();  // Turn right
+                print(turning_right);                
+            } else {
+                motor_turn_left();   // Turn left
+                print(turning_left);
+            }
+
+        } else {
+            motor_forward();        // Continue moving forward
+        }
 
 	}//end while
 }//end main

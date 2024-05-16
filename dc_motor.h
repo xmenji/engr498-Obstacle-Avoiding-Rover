@@ -4,6 +4,7 @@
 #include "stm32l476xx.h"
 
 // Function prototypes
+void setup_timers();
 void configure_motor_pins(void);
 void motor_stop(void);
 void motor_forward(void);

@@ -1,120 +1,93 @@
-//Lab 7 Code
-#include <stdio.h>
 #include "stm32l476xx.h"
-#include "LED.h"
-#include "USART2.h"
-#include "TIM2.h"
-#include "TIM4.h"
-#include "DC_motor.h"
+#include "dc_motor.h"
 
-volatile float right_distance;
-volatile float left_distance;
-volatile float current_distance;
+// GPIO Pin Definitions for Motor Control
+#define IN1_PIN (1 << 0)  // PC0
+#define IN2_PIN (1 << 1)  // PC1
+#define IN3_PIN (1 << 2)  // PC2
+#define IN4_PIN (1 << 3)  // PC3
 
-//modular function to add delays within the program
-void delay(int n){
-    int i;
-    for(i = 0; i <= n; i++);
+// Timer setup for delays
+void setup_timers() {
+    // Enable clock for TIM6
+    RCC->APB1ENR1 |= RCC_APB1ENR1_TIM6EN;
+
+    // Configure TIM6 as a basic timer for delays
+    TIM6->PSC = 7999; // Prescaler to slow down the timer to 10 kHz (assuming 80 MHz clock)
+    TIM6->ARR = 9999; // Auto-reload value for generating delays
+    TIM6->CR1 |= TIM_CR1_OPM; // Enable one-pulse mode
 }
 
-//modular function to print messages to terminal via USART
-void print(char* msg){
-    int i = 0;
-    // Loop to send the welcome message character by character when the system restarts.
-    while(msg[i]!='\0'){
+// Function to configure GPIO pins for the motor driver
+void configure_motor_pins() {
+    RCC->AHB2ENR |= RCC_AHB2ENR_GPIOCEN;  // Enable Clock for GPIOC
 
-        // Wait until the TXE (Transmit Data Register Empty) flag is set, indicating readiness to send the next character.
-        while (!(USART2->ISR & USART_ISR_TXE));   
+    // Set PC0, PC1, PC2, PC3 as output
+    GPIOC->MODER &= ~((0x3 << (0 * 2)) | (0x3 << (1 * 2)) | (0x3 << (2 * 2)) | (0x3 << (3 * 2)));  // Clear mode bits
+    GPIOC->MODER |= (0x1 << (0 * 2)) | (0x1 << (1 * 2)) | (0x1 << (2 * 2)) | (0x1 << (3 * 2));  // Set mode to output
+}
 
-        // Send the current character and automatically clear the TXE flag by writing to USART_TDR.
-        // increment i after sending the current character
-        USART2->TDR = msg[i++];
+// Motor control functions using GPIO adjustments
+void motor_stop() {
+    GPIOC->ODR &= ~(IN1_PIN | IN2_PIN | IN3_PIN | IN4_PIN);  // Set IN1, IN2, IN3, IN4 to LOW
+}
+
+void motor_forward() {
+    GPIOC->ODR |= IN1_PIN;  // Set IN1 to HIGH
+    GPIOC->ODR &= ~IN2_PIN; // Set IN2 to LOW
+    GPIOC->ODR |= IN3_PIN;  // Set IN3 to HIGH
+    GPIOC->ODR &= ~IN4_PIN; // Set IN4 to LOW
+}
+
+void motor_backward() {
+    GPIOC->ODR &= ~IN1_PIN; // Set IN1 to LOW
+    GPIOC->ODR |= IN2_PIN;  // Set IN2 to HIGH
+    GPIOC->ODR &= ~IN3_PIN; // Set IN3 to LOW
+    GPIOC->ODR |= IN4_PIN;  // Set IN4 to HIGH
+}
+
+void motor_turn_left() {
+    GPIOC->ODR |= IN1_PIN;  // Set IN1 to HIGH
+    GPIOC->ODR &= ~IN2_PIN; // Set IN2 to LOW
+    GPIOC->ODR &= ~IN3_PIN; // Set IN3 to LOW
+    GPIOC->ODR |= IN4_PIN;  // Set IN4 to HIGH
+}
+
+void motor_turn_right() {
+    GPIOC->ODR &= ~IN1_PIN; // Set IN1 to LOW
+    GPIOC->ODR |= IN2_PIN;  // Set IN2 to HIGH
+    GPIOC->ODR |= IN3_PIN;  // Set IN3 to HIGH
+    GPIOC->ODR &= ~IN4_PIN; // Set IN4 to LOW
+}
+
+void delay_ms(int ms) {
+    // Configure TIM6 for a delay in milliseconds
+    TIM6->CNT = 0;  // Reset the counter
+    TIM6->PSC = 7999;  // Prescaler to slow down the timer to 10 kHz (assuming 80 MHz clock)
+    TIM6->ARR = 10 * ms;  // Auto-reload value to generate the delay
+    TIM6->EGR |= TIM_EGR_UG;  // Update generation to load the prescaler value
+    TIM6->SR &= ~TIM_SR_UIF;  // Clear the update interrupt flag
+    TIM6->CR1 |= TIM_CR1_CEN;  // Enable the counter
+
+    // Wait until the update interrupt flag is set
+    while (!(TIM6->SR & TIM_SR_UIF));
+    TIM6->SR &= ~TIM_SR_UIF;  // Clear the update interrupt flag
+}
+
+void control_logic(float left_distance, float right_distance, float current_distance) {
+    if (current_distance < 10.0) {
+        motor_stop();
+        delay_ms(300);  // Delay for 300 ms
+        motor_backward();  // Reverse the robot
+        delay_ms(1000);  // Move backward for a short duration
+
+        // Check distances to decide the next move
+        if (left_distance > right_distance) {
+            motor_turn_left();
+        } else {
+            motor_turn_right();
+        }
+    } else {
+        motor_forward();
     }
 }
-
-/////////////////////////////
-// *****MAIN FUNCTION******//
-/////////////////////////////
-int main(void){
-    char msg[] = "\n\rWelcome! Press '1' to start the distance detection and measurement; press '2' to stop the system.\n\r";
-    char turning_right[] = "\n\rTurning right...\n\r";
-    char turning_left[] = "\n\rTurning left...\n\r";
-    int i=0;
-    //////////////////////////////////////////////
-    /**** ULTRA SONIC SENSOR MODULE CONFIGS ****/
-    //////////////////////////////////////////////
-
-    // Configure PA5 to serve as an output pin, used for controlling the on-board LED (LD2).
-    configure_LED_pin();
-
-    //Configure PB10 as TIM2 Channel 3 (Output Trigger)
-    configure_PB10();
-
-    //Configure PB6 as TIM4 Channel 1 (Input Echo)
-    configure_PB6();
-
-    //Configure TIM4 CH1 as input capture mode
-    configure_TIM4_CH1();
-
-    //Configure TIM2 CH3 as PWM output mode 1
-    configure_TIM2_CH3();
-
-    // Initialize USART2 for communication with a PC via serial terminal.
-    USART2_Init();
-
-    // Configure motor GPIO pins and initialize PWM timers
-    configure_motor_pins();
-    setup_pwm_timers();
-
-    // Loop to send the welcome message character by character when the system restarts.
-    print(msg);
-
-    float distance;
-
-    // Enter an infinite loop to maintain the program's operation.
-    while (1){
-        //User presses '1' on the keyboard
-        if(USART2->RDR == '1'){
-            turn_on_LED();           //turn on the on-board LED
-            delay(100000);                       //add a delay between each print
-        }
-
-        distance = get_distance();
-        current_distance = distance;
-        if(distance <= 9){
-            motor_stop();           // Stop the motors
-            delay(100000);          // Short delay before taking action
-
-            motor_backward();       // Move backward
-            delay(500000);          // Move backward for a bit
-
-            // Take right distance measurement
-            pos_90degrees();
-            delay(500000);
-            display_distance();
-            right_distance = get_distance();
-            _0degrees();
-            delay(500000);
-
-            // Take left distance measurement
-            neg_90degrees();
-            delay(500000);
-            display_distance();
-            left_distance = get_distance();
-            _0degrees();
-
-            // Decide which way to turn
-            if(right_distance >= left_distance){
-                motor_turn_right();  // Turn right
-                print(turning_right);                
-            } else {
-                motor_turn_left();   // Turn left
-                print(turning_left);
-            }
-
-        } else {
-            motor_forward();        // Continue moving forward
-        }
-
-    }//end while
-}//end main
