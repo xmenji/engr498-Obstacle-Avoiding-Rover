@@ -47,13 +47,18 @@ int main(void){
 	char turning_left[] = "\n\rTurning left...\n\r";
 	char moving_forward[] = "\n\rMoving forward...\n\r";
 	int i=0;
+	
+	
+	  //////////////////////////////////////////////
+	/**** On-board LED CONFIGS ****/
+	/////////////////////////////////////////////
+	// Configure PA5 to serve as an output pin, used for controlling the on-board LED (LD2).
+    configure_LED_pin();
+	
+	
   //////////////////////////////////////////////
 	/**** ULTRA SONIC SENSOR MODULE CONFIGS ****/
 	/////////////////////////////////////////////
-	
-// Configure PA5 to serve as an output pin, used for controlling the on-board LED (LD2).
-    configure_LED_pin();
-
     //Configure PB10 as TIM2 Channel 3 (Output Trigger)
     configure_PB10();
 
@@ -65,9 +70,24 @@ int main(void){
 
     //Configure TIM2 CH3 as PWM output mode 1
     configure_TIM2_CH3();
-
+		
+		
+		///////////////////////////////////
+		//**** USART CONFIGS ****///
+		///////////////////////////////////
     // Initialize USART2 for communication with a PC via serial terminal.
     USART2_Init();
+		
+		
+		///////////////////////////////////
+		//**** SERVO MODULE CONFIGS ****///
+		///////////////////////////////////
+		//Configure pin PA1
+		configure_PA1();
+		
+		//Initialize Timer 5, Channel 2
+		TIM5_CH2_Init();
+		
 		
 		///////////////////////////////////
 		//**** MOTOR DRIVER CONFIGS ****///
@@ -80,6 +100,7 @@ int main(void){
     // Loop to send the welcome message character by character when the system restarts.
     print(msg);
 		
+		
 		///////////////////////////////////
 		//**** PUSH BUTTON CONFIGS ****///
 		///////////////////////////////////
@@ -88,15 +109,16 @@ int main(void){
 		//Invoke configure_EXTI() to set up edge-triggered interrput on PC13
 		configure_EXTI();
 
-    float distance;
 
+    float distance;
     // Enter an infinite loop to maintain the program's operation.
     while (1){
 
-
         distance = get_distance();
         current_distance = distance;
-        if(distance <= 50.0){       //Sees obstacle within 50cm
+			
+				//Sees obstacle within 50cm
+        if(distance <= 50.0){       
             motor_stop();           // Stop the motors
             delay(1000000);          // Short delay before taking action
 
@@ -104,7 +126,7 @@ int main(void){
             delay(500000);          // Move backward for a bit
 					
 					  motor_stop();           // Stop the motors to take left/right measurements
-            delay(1000000);          // Short delay before taking action
+            delay(100000);          // Short delay before taking action
 
             // Take right distance measurement
             pos_90degrees();
@@ -120,7 +142,8 @@ int main(void){
             display_distance();
             left_distance = get_distance();
             _0degrees();
-
+						delay(500000);
+						
             // Decide which way to turn
             if(right_distance >= left_distance){
                 motor_turn_right();  // Turn right
@@ -134,6 +157,6 @@ int main(void){
             motor_forward();        // Continue moving forward
         }
 
-	}//end while
-}//end main
+	}
+}
 

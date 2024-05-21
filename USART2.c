@@ -86,7 +86,6 @@ void USART2_IRQHandler(void){
 	uint8_t data;
 	int i = 0;
 
-	char stop_msg[] = "\n\rSystem Stopped.\n\r";
 	char error_msg[] = "\n\rCommand not recognized.\n\r";
 	// Check if the RXNE (Receive Not Empty) interrupt is triggered, indicating new data is available in the USART_RDR register.
 	if(USART2->ISR & USART_ISR_RXNE) {	
@@ -102,24 +101,11 @@ void USART2_IRQHandler(void){
 		
 		//User presses '1'
 		if(USART2->RDR == '1'){
-//			//Enable TIM2 (output) 
-//			TIM2->CR1 |= 1UL;
-//			//Enable TIM4 (input)
-//			TIM4->CR1 |= 1UL;
+			print_distance();
 		}
-		//User presses '2'
-		else if(USART2->RDR == '2'){
-//			//Disable TIM2 (output) 
-//			TIM2->CR1 &= ~(1UL);
-//			//Disable TIM4 (input)
-//			TIM4->CR1 &= ~(1UL);
 
-			//turn_off_LED();				
-			//print(stop_msg);
-
-		}
 		else{
-			//print(error_msg);				
+			print(error_msg);				
 		}
 		
 	} 
